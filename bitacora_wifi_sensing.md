@@ -237,9 +237,15 @@ _(Al final de cada sesión: fecha + qué hice + qué me atascó + siguiente paso
   4. Inyectar el clf real en monitor_vivo y hacer el demo en vivo real; calibrar
      umbral_resp con las capturas.
   5. Decidir hardware según el SNR medido: WROOM basta / hace falta multi-antena.
-- Pendiente sin HW aún posible (Fase 4, portfolio): repo git limpio + README +
-  writeup técnico honesto posicionando vs literatura (Widar, FarSense, respiración
-  por CSI). Es la palanca que queda para subir de "buen proyecto" a "fascinante".
+- Packaging (Fase 4) HECHO en parte:
+  - Repo git propio inicializado en Desktop/Sensing (rama main, commit inicial,
+    .gitignore correcto). LOCAL: falta crear remoto en GitHub y `git push`
+    (requiere cuenta de Marc; no hecho aún).
+  - README reescrito con demo (figuras), diagrama del pipeline, tabla de módulos,
+    estado y sección de honestidad (límite de generalización entre salas).
+  - Pendiente: writeup técnico de 1-2 páginas posicionando vs literatura
+    (802.11bf; línea de sensing/vital-signs por CSI) — mejor hacerlo con una
+    MÉTRICA REAL que contar, o sea después del día 16.
 - Estrategia (importante):
   - Estrella polar fijada: detección de RESPIRACIÓN de persona quieta a través
     de pared (micro-movimiento del pecho ~0.2-0.4 Hz). Presencia/movimiento en

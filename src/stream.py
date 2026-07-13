@@ -1,7 +1,7 @@
-"""Lectura y detección en tiempo real de CSI desde un CSV que crece en vivo.
+"""Real-time reading and detection of CSI from a CSV that grows live.
 
-El dia 16 'idf.py monitor | findstr CSI_DATA > captura.csv' va escribiendo el
-fichero mientras nosotros lo leemos. Este modulo lee solo lo nuevo y decide.
+On capture day, 'idf.py monitor | findstr CSI_DATA > capture.csv' keeps writing
+the file while we read it. This module reads only what is new and decides.
 """
 from __future__ import annotations
 
@@ -11,19 +11,19 @@ from src.load_esp32 import fila_a_amplitud
 
 
 class CsiTailer:
-    """Lee incrementalmente un CSV de CSI que crece (como 'tail -f').
+    """Incrementally reads a growing CSI CSV (like 'tail -f').
 
-    Recuerda el offset en bytes y devuelve solo las filas nuevas y COMPLETAS.
-    Guarda una linea parcial para completarla en la siguiente lectura.
+    Remembers the byte offset and returns only the new, COMPLETE rows.
+    Keeps a partial line to complete it on the next read.
     """
 
     def __init__(self, path: str):
         self.path = path
         self.offset = 0
-        self.resto = ""            # linea a medias pendiente de la lectura previa
+        self.resto = ""            # half-line pending from the previous read
 
     def read_new(self) -> np.ndarray:
-        """Devuelve (m, 64) con las filas nuevas (o (0, 64) si no hay)."""
+        """Returns (m, 64) with the new rows (or (0, 64) if none)."""
         with open(self.path) as f:
             f.seek(self.offset)
             datos = f.read()
@@ -31,7 +31,7 @@ class CsiTailer:
 
         datos = self.resto + datos
         lineas = datos.split("\n")
-        self.resto = lineas.pop()          # la ultima puede estar incompleta
+        self.resto = lineas.pop()          # the last one may be incomplete
 
         filas = []
         for linea in lineas:
@@ -42,7 +42,7 @@ class CsiTailer:
                 crudo = linea.split("[")[1].split("]")[0]
                 a = fila_a_amplitud(crudo)
             except (IndexError, ValueError):
-                continue                    # linea corrupta -> saltar
+                continue                    # corrupt line -> skip
             if a.size == 64:
                 filas.append(a)
         return np.stack(filas) if filas else np.empty((0, 64))
@@ -54,17 +54,17 @@ from src.breathing import estimate_breathing
 
 
 class LiveMonitor:
-    """Buffer deslizante + veredicto en vivo.
+    """Sliding buffer + live verdict.
 
-    El discriminante movimiento/quieto NO es un umbral a mano (movimiento y
-    respiracion se confunden con una simple varianza): es el CLASIFICADOR ya
-    entrenado (features -> modelo), que se inyecta. La respiracion se estima
-    aparte sobre el buffer largo cuando la persona esta quieta.
+    The motion/still discriminator is NOT a hand-tuned threshold (motion and
+    breathing get confused by a simple variance): it is the already-trained
+    CLASSIFIER (features -> model), which is injected. Breathing is estimated
+    separately over the long buffer when the person is still.
     """
 
     def __init__(self, clf=None, mov_label: int = 1, fs: float = 100.0,
                  dur_s: float = 60.0, win_len: int = 128, umbral_resp: float = 2.0):
-        self.clf = clf                 # pipeline sklearn ya entrenado (o None)
+        self.clf = clf                 # already-trained sklearn pipeline (or None)
         self.mov_label = mov_label
         self.fs = fs
         self.maxlen = int(dur_s * fs)
@@ -80,27 +80,27 @@ class LiveMonitor:
     def veredicto(self) -> dict:
         n = len(self.buf)
         if n < max(self.win_len, int(2 * self.fs)):
-            return {"estado": "calentando", "n": n}
-        # 1) movimiento? -> clasificador sobre la ventana reciente
+            return {"state": "warming up", "n": n}
+        # 1) motion? -> classifier over the recent window
         moviendo = False
         if self.clf is not None:
             feat = window_features(self.buf[-self.win_len:])[None, :]
             moviendo = self.clf.predict(feat)[0] == self.mov_label
         if moviendo:
-            return {"estado": "MOVIMIENTO", "rpm": None, "conf": None, "n": n}
-        # 2) quieto -> estimar respiracion sobre el buffer largo
+            return {"state": "MOTION", "rpm": None, "conf": None, "n": n}
+        # 2) still -> estimate breathing over the long buffer
         rpm, conf = estimate_breathing(lowpass(self.buf, fs=self.fs, fc=1.0), fs=self.fs)
-        estado = f"QUIETO · respira {rpm:.0f} rpm" if conf > self.umbral_resp else "VACIO / sin senal"
-        return {"estado": estado, "rpm": round(rpm, 1), "conf": round(conf, 1), "n": n}
+        state = f"STILL · breathing {rpm:.0f} bpm" if conf > self.umbral_resp else "EMPTY / no signal"
+        return {"state": state, "rpm": round(rpm, 1), "conf": round(conf, 1), "n": n}
 
 import time
 from datetime import datetime
 def monitor_vivo(path: str, clf, fs: float = 100.0, refresco_s: float = 2.0,
                  duracion_s: float | None = None, dur_buffer_s: float = 60.0) -> None:
-    """Lee el CSV en vivo y va imprimiendo el veredicto cada `refresco_s`.
+    """Reads the CSV live and prints the verdict every `refresco_s` seconds.
 
-    duracion_s=None -> corre indefinidamente (Ctrl+C para parar). El dia 16:
-    lanzar la captura a `path` y ejecutar esto en paralelo.
+    duracion_s=None -> runs indefinitely (Ctrl+C to stop). On capture day:
+    start the capture into `path` and run this in parallel.
     """
     tailer = CsiTailer(path)
     mon = LiveMonitor(clf=clf, fs=fs, dur_s=dur_buffer_s)
@@ -110,5 +110,5 @@ def monitor_vivo(path: str, clf, fs: float = 100.0, refresco_s: float = 2.0,
         v = mon.veredicto()
         hora = datetime.now().strftime("%H:%M:%S")
         extra = f"  conf={v['conf']}" if v.get("conf") is not None else ""
-        print(f"[{hora}] {v['estado']:26s} (buffer {v['n'] / fs:4.0f}s){extra}")
+        print(f"[{hora}] {v['state']:26s} (buffer {v['n'] / fs:4.0f}s){extra}")
         time.sleep(refresco_s)

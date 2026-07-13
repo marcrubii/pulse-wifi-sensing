@@ -1,10 +1,10 @@
-"""Entrena y evalúa un clasificador movimiento vs quieto sobre CSI.
+"""Trains and evaluates a motion-vs-still classifier on CSI.
 
-Pipeline completo end-to-end:
-    CSI crudo -> features -> escalado -> clasificador -> métricas.
+Full end-to-end pipeline:
+    raw CSI -> features -> scaling -> classifier -> metrics.
 
-Usa RandomForest (robusto, sin ajuste fino) como línea base. El objetivo de
-la Fase 0 no es exprimir la accuracy sino tener el pipeline montado y validado.
+Uses RandomForest (robust, no fine-tuning) as a baseline. The goal of Phase 0
+is not to squeeze accuracy but to have the pipeline built and validated.
 """
 
 from __future__ import annotations
@@ -21,11 +21,11 @@ from synth_csi import make_dataset
 
 
 def run(n_per_class: int = 200, snr_db: float = 25.0, seed: int = 0):
-    # 1. Datos CSI (sintéticos por ahora; se sustituirán por datos reales ESP32).
+    # 1. CSI data (synthetic for now; to be replaced by real ESP32 data).
     X_csi, y = make_dataset(n_per_class=n_per_class, snr_db=snr_db, seed=seed)
-    print(f"CSI: {X_csi.shape}  clases={np.bincount(y)}  SNR={snr_db} dB")
+    print(f"CSI: {X_csi.shape}  classes={np.bincount(y)}  SNR={snr_db} dB")
 
-    # 2. Extracción de características.
+    # 2. Feature extraction.
     X = extract_features(X_csi)
 
     # 3. Train/test split.
@@ -33,27 +33,27 @@ def run(n_per_class: int = 200, snr_db: float = 25.0, seed: int = 0):
         X, y, test_size=0.3, random_state=seed, stratify=y
     )
 
-    # 4. Modelo.
+    # 4. Model.
     clf = make_pipeline(
         StandardScaler(),
         RandomForestClassifier(n_estimators=200, random_state=seed),
     )
     clf.fit(X_tr, y_tr)
 
-    # 5. Evaluación.
+    # 5. Evaluation.
     y_pred = clf.predict(X_te)
-    print("\n== Matriz de confusión (filas=real, cols=pred) ==")
-    print("        quieto  movim")
+    print("\n== Confusion matrix (rows=true, cols=pred) ==")
+    print("        still  motion")
     cm = confusion_matrix(y_te, y_pred)
-    for name, row in zip(("quieto", "movim "), cm):
+    for name, row in zip(("still ", "motion"), cm):
         print(f"{name}   {row[0]:5d} {row[1]:6d}")
-    print("\n== Reporte ==")
-    print(classification_report(y_te, y_pred, target_names=["quieto", "movimiento"]))
+    print("\n== Report ==")
+    print(classification_report(y_te, y_pred, target_names=["still", "motion"]))
 
-    # 6. Importancia de features (qué mira el modelo).
+    # 6. Feature importance (what the model looks at).
     rf = clf.named_steps["randomforestclassifier"]
     order = np.argsort(rf.feature_importances_)[::-1]
-    print("== Importancia de features ==")
+    print("== Feature importance ==")
     for i in order:
         print(f"  {FEATURE_NAMES[i]:15s} {rf.feature_importances_[i]:.3f}")
 
