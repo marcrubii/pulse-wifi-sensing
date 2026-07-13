@@ -246,6 +246,11 @@ _(Al final de cada sesión: fecha + qué hice + qué me atascó + siguiente paso
     estados del monitor en vivo, notebook (texto/comentarios/etiquetas de gráficos)
     y las 2 figuras regeneradas. Identificadores en español se mantienen (para no
     romper imports entre módulos). La bitácora se queda en español (log personal).
+  - Pulido final del repo: LICENSE MIT añadido; scratch_tr.py (borrador) eliminado;
+    notebooks 00/01 de Fase 0 sacados del repo (siguen en local, gitignored) → el
+    repo publica solo el notebook de demo 02. Raíz limpia. Todo sincronizado.
+  - Pendiente Fase 4 (para después del día 16, con métrica real): writeup técnico
+    1-2 págs posicionando vs literatura. Y opcional en la web: añadir topics.
   - Pendiente: writeup técnico de 1-2 páginas posicionando vs literatura
     (802.11bf; línea de sensing/vital-signs por CSI) — mejor hacerlo con una
     MÉTRICA REAL que contar, o sea después del día 16.
