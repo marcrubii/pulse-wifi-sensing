@@ -238,11 +238,14 @@ _(Al final de cada sesión: fecha + qué hice + qué me atascó + siguiente paso
      umbral_resp con las capturas.
   5. Decidir hardware según el SNR medido: WROOM basta / hace falta multi-antena.
 - Packaging (Fase 4) HECHO en parte:
-  - Repo git propio inicializado en Desktop/Sensing (rama main, commit inicial,
-    .gitignore correcto). LOCAL: falta crear remoto en GitHub y `git push`
-    (requiere cuenta de Marc; no hecho aún).
+  - Repo git propio inicializado en Desktop/Sensing (rama main, .gitignore
+    correcto). PUBLICADO en GitHub: https://github.com/marcrubii/pulse-wifi-sensing
   - README reescrito con demo (figuras), diagrama del pipeline, tabla de módulos,
     estado y sección de honestidad (límite de generalización entre salas).
+  - TODO EL REPO EN INGLÉS: README, los 8 módulos de src/ (docstrings/comentarios),
+    estados del monitor en vivo, notebook (texto/comentarios/etiquetas de gráficos)
+    y las 2 figuras regeneradas. Identificadores en español se mantienen (para no
+    romper imports entre módulos). La bitácora se queda en español (log personal).
   - Pendiente: writeup técnico de 1-2 páginas posicionando vs literatura
     (802.11bf; línea de sensing/vital-signs por CSI) — mejor hacerlo con una
     MÉTRICA REAL que contar, o sea después del día 16.
