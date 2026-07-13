@@ -8,6 +8,10 @@ venv/
 # Jupyter
 .ipynb_checkpoints/
 
+# Notebooks de exploración Fase 0 (fuera del repo público; siguen en local)
+notebooks/00_fase0_pipeline_csi.ipynb
+notebooks/01_loader_esp32.ipynb
+
 # Datos (no versionar datasets grandes)
 data/raw/*
 data/processed/*
