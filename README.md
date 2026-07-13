@@ -104,3 +104,7 @@ everything.
 
 Full roadmap and development log (in Spanish):
 [bitacora_wifi_sensing.md](bitacora_wifi_sensing.md).
+
+## License
+
+MIT — see [LICENSE](LICENSE).
