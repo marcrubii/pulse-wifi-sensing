@@ -1,68 +1,68 @@
-# WiFi Sensing con CSI — detección de presencia y respiración sin cámara
+# WiFi Sensing with CSI — camera-free presence & breathing detection
 
-Detecta **presencia, movimiento y respiración** de una persona a partir de las
-perturbaciones que su cuerpo provoca en la señal WiFi (*Channel State
-Information*, CSI). Sin cámara → enfoque de privacidad. El RF atraviesa tabiques,
-así que funciona a través de paredes.
+Detect **presence, motion and breathing** of a person from the perturbations the
+human body causes in a WiFi signal (*Channel State Information*, CSI). No camera →
+privacy by design. RF passes through drywall, so it works across walls.
 
-> **Qué es:** un pipeline de DSP + ML que, a partir del CSI de un enlace WiFi,
-> dice *hay alguien / se mueve / está quieto respirando a X rpm*.
+> **What it is:** a DSP + ML pipeline that, from the CSI of a single WiFi link,
+> tells you *someone is here / moving / still and breathing at X bpm*.
 >
-> **Qué no es:** no reconstruye imágenes ni poses. La estimación de esqueleto
-> ("DensePose from WiFi") queda fuera de alcance a propósito.
+> **What it is not:** it does not reconstruct images or body pose. Skeleton
+> estimation ("DensePose from WiFi") is deliberately out of scope.
 
 ## Demo
 
-Detección de la **frecuencia respiratoria de una persona inmóvil** (la señal está
-enterrada en el CSI crudo; el DSP la extrae y el sistema se *niega* cuando no hay
-nadie, en vez de inventar un número):
+Estimating the **breathing rate of a motionless person** (the signal is buried in
+the raw CSI; the DSP pulls it out, and the system *refuses* when nobody is there
+instead of inventing a number):
 
-![Demo de detección de respiración](figures/demo_respiracion.png)
+![Breathing detection demo](figures/demo_respiracion.png)
 
-**Evaluación honesta** — robustez frente al ruido (dónde funciona y dónde deja de
-hacerlo). La palanca que más manda es la longitud de ventana, no el modelo:
+**Honest evaluation** — robustness against noise (where it works and where it
+stops working). The biggest lever is window length, not the model:
 
-![Curva de robustez vs SNR](figures/robustez_respiracion.png)
+![Robustness vs SNR](figures/robustez_respiracion.png)
 
-> Ambas figuras están generadas sobre **CSI sintético con verdad conocida** (para
-> validar el algoritmo aislando la física). La captura con hardware real
-> (2× ESP32) es el siguiente paso.
+> Both figures are generated on **synthetic CSI with known ground truth** (to
+> validate the algorithm while isolating the physics). Capture with real hardware
+> (2× ESP32) is the next step.
 
-## Cómo funciona
+## How it works
 
 ```
-CSV de CSI  ──►  preprocesado         ──►  { ventaneo + clasificador  ──►  presencia / movimiento
-(ESP32)          (nulas · anti-picos       { respiración (FFT + PCA)   ──►  frecuencia respiratoria
-                  · paso-bajo)             veredicto en vivo (stream)
+CSI CSV     ──►  preprocessing        ──►  { windowing + classifier   ──►  presence / motion
+(ESP32)          (null subcarriers ·       { breathing (FFT + PCA)     ──►  respiratory rate
+                  spike removal ·          real-time verdict (stream)
+                  low-pass)
 ```
 
-- **Preprocesado** ([src/preprocess.py](src/preprocess.py)): quita subportadoras
-  nulas, aplasta picos impulsivos (filtro Hampel robusto) y filtra a la banda
-  lenta del movimiento/respiración (Butterworth de fase cero).
-- **Respiración** ([src/breathing.py](src/breathing.py)): FFT temporal con
-  zero-padding + combinación ponderada de subportadoras + una **confianza**
-  (pico/media en banda) que evita falsos positivos en habitación vacía.
-- **Clasificador de movimiento** ([src/features.py](src/features.py),
-  [src/train.py](src/train.py)): características de variabilidad temporal →
-  RandomForest (línea base).
-- **Tiempo real** ([src/stream.py](src/stream.py)): lee el CSV mientras se llena,
-  mantiene un buffer deslizante y emite el veredicto en vivo.
+- **Preprocessing** ([src/preprocess.py](src/preprocess.py)): drops null
+  subcarriers, crushes impulsive spikes (robust Hampel filter) and band-limits to
+  the slow motion/breathing band (zero-phase Butterworth).
+- **Breathing** ([src/breathing.py](src/breathing.py)): temporal FFT with
+  zero-padding + weighted subcarrier combining + a **confidence** score
+  (peak/band-mean) that prevents false positives in an empty room.
+- **Motion classifier** ([src/features.py](src/features.py),
+  [src/train.py](src/train.py)): temporal-variability features → RandomForest
+  (baseline).
+- **Real time** ([src/stream.py](src/stream.py)): reads the CSV as it grows, keeps
+  a sliding buffer and emits a live verdict.
 
-## Módulos
+## Modules
 
-| Archivo | Qué hace |
+| File | What it does |
 |---|---|
-| `src/synth_csi.py` | Genera CSI sintético (movimiento y respiración) para validar sin hardware |
-| `src/load_esp32.py` | Carga el CSV real del ESP32-CSI-Tool → matriz de amplitud |
-| `src/preprocess.py` | Limpieza: nulas → anti-picos → paso-bajo |
-| `src/features.py` | Características + ventaneo deslizante |
-| `src/breathing.py` | Estimador de frecuencia respiratoria + confianza |
-| `src/dataset.py` | Construye dataset etiquetado desde `data/raw/*.csv` |
-| `src/train.py` | Entrena y evalúa el clasificador movimiento/quieto |
-| `src/stream.py` | Lectura incremental + monitor en vivo (3 estados) |
-| `notebooks/02_demo_respiracion.ipynb` | Demo visual de la detección de respiración |
+| `src/synth_csi.py` | Generates synthetic CSI (motion & breathing) to validate without hardware |
+| `src/load_esp32.py` | Loads the real ESP32-CSI-Tool CSV → amplitude matrix |
+| `src/preprocess.py` | Cleanup: null subcarriers → spike removal → low-pass |
+| `src/features.py` | Features + sliding windows |
+| `src/breathing.py` | Respiratory-rate estimator + confidence |
+| `src/dataset.py` | Builds a labeled dataset from `data/raw/*.csv` |
+| `src/train.py` | Trains and evaluates the motion/still classifier |
+| `src/stream.py` | Incremental reader + live 3-state monitor |
+| `notebooks/02_demo_respiracion.ipynb` | Visual demo of breathing detection |
 
-## Puesta en marcha
+## Getting started
 
 ```powershell
 python -m venv .venv
@@ -70,37 +70,37 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
-Demo de respiración (sobre datos sintéticos, sin hardware):
+Breathing demo (on synthetic data, no hardware needed):
 
 ```powershell
 jupyter notebook notebooks/02_demo_respiracion.ipynb
 ```
 
-Pipeline de clasificación end-to-end:
+End-to-end classification pipeline:
 
 ```powershell
 $env:PYTHONPATH="."; python src/train.py
 ```
 
-## Estado y honestidad
+## Status & honesty
 
-- **Hecho:** pipeline completo (preprocesado, ventaneo, clasificador, detector de
-  respiración, monitor en vivo), validado sobre CSI sintético con verdad conocida.
-- **En curso:** captura con hardware real (2× ESP32-WROOM-32) y evaluación sobre
-  datos propios.
-- **Límite conocido y asumido:** el CSI **no generaliza entre salas** (el canal
-  estático cambia). La evaluación honesta exige entrenar en unas grabaciones y
-  testear en **otras distintas** de la misma clase; una validación cruzada
-  ingenua sobre una sola grabación infla los resultados. Para un entorno nuevo se
-  recalibra in situ (grabar unos minutos por clase y reentrenar).
+- **Done:** full pipeline (preprocessing, windowing, classifier, breathing
+  estimator, live monitor), validated on synthetic CSI with known ground truth.
+- **In progress:** capture with real hardware (2× ESP32-WROOM-32) and evaluation
+  on own data.
+- **Known, accepted limit:** CSI **does not generalize across rooms** (the static
+  channel changes). Honest evaluation requires training on some recordings and
+  testing on **different** ones of the same class; a naive cross-validation over a
+  single recording inflates the results. For a new environment you recalibrate on
+  site (record a few minutes per class and retrain).
 
-## Contexto
+## Context
 
-El estándar **IEEE 802.11bf (WLAN Sensing)** ya está publicado; el sensado por
-WiFi es un área activa (presencia, cuidado de mayores, edificios inteligentes).
-Este proyecto se inspira en la línea de trabajo de *sensing* por CSI (detección de
-actividad y de signos vitales como la respiración) y prioriza **un caso bien
-resuelto y honestamente evaluado** frente a abarcar todo.
+The **IEEE 802.11bf (WLAN Sensing)** standard is already published; WiFi sensing
+is an active field (presence, elderly care, smart buildings). This project draws
+on the CSI-sensing line of work (activity and vital-sign detection such as
+breathing) and favors **one well-solved, honestly-evaluated case** over covering
+everything.
 
-Hoja de ruta completa y bitácora de desarrollo:
+Full roadmap and development log (in Spanish):
 [bitacora_wifi_sensing.md](bitacora_wifi_sensing.md).
