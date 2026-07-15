@@ -126,9 +126,36 @@ Objetivo: convertir el trabajo en portfolio/tracción.
       (incluye adaptador de bornes verde de regalo; no imprescindible)
 - [ ] 2× cables USB-C de DATOS (no solo carga) — confirmar que la placa es USB-C
 - [ ] (Opcional, NO comprar ahora) microSD — el CSI se guarda por USB en el PC
-- [x] Driver serie: es CH340C → instalado CH341SER.EXE en Windows (OK).
-      (No hace falta CP2102.)
+- [x] ~~Driver serie: es CH340C → instalado CH341SER.EXE~~ **CORREGIDO en Sesión 5b:
+      las placas son CP2102, NO CH340C.** Windows las reporta como
+      `Silicon Labs CP210x USB to UART Bridge`. Aquella nota se escribió a partir
+      del anuncio, antes de que llegaran. **Al comprar más, filtrar por CP2102.**
 Presupuesto real: ~12 € placas + cables
+
+### Compra pendiente (decidida en Sesión 5b, ~50-60 €)
+**Consejo nº1: pedir EL MISMO anuncio que ya compraste** (ESP32-WROOM-32 DevKitC
+USB-C, CP2102, ~5,89 €/u). Funcionan, el driver está puesto, el conector encaja.
+No experimentar con hardware que ya va.
+- [ ] **4× ESP32-WROOM-32 DevKitC USB-C (CP2102)** — receptores `passive`. El tool
+      ya soporta la arquitectura: 1 sta transmitiendo + 1 AP + N pasivos
+      escuchando el MISMO tren de paquetes. No añaden interferencia (no
+      transmiten). Justificación medida: sin línea de visión, un solo enlace es
+      una lotería (3.3 vs 17.3 dB en la misma condición) → 4 receptores = 4
+      tiradas, y te quedas con el que tenga un camino que cruce el pecho.
+- [ ] **1× hub USB CON ALIMENTACIÓN PROPIA** (4-7 puertos + transformador). El
+      portátil no alimenta 5 placas; ver el brownout de la Sesión 5.
+- [ ] **5× cable USB-A→USB-C de DATOS, 2-3 m, grueso.** El cable fino fue la causa
+      del brownout que costó 30 min.
+- [ ] **6× mini trípode / pinza de móvil.** Repetibilidad: con cinta el RSSI derivó
+      3.3 dB en 15 min y cada montaje es irrepetible. Es la mayor fuente de ruido
+      experimental ahora mismo.
+- [ ] (Opcional, 3 piezas que deben encajar) **2× ESP32-WROOM-32U** (conector U.FL)
+      + **2× latiguillo U.FL→SMA hembra** + **2× antena 2.4 GHz SMA macho**,
+      direccional si es posible. Da ganancia y sobre todo **directividad** →
+      poder APUNTAR, que es justo lo que falta en el caso sin línea de visión.
+- [ ] (NO comprar todavía) Intel AX200/AX210 + PicoScenes. La medida de la Sesión
+      5b ya decidió: **el WROOM basta para respiración en LOS (39.1 dB vs listón
+      de 20)**. El AX210 solo si la fase / CSI ratio resulta imprescindible.
 
 ---
 
