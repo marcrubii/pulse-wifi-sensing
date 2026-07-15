@@ -41,6 +41,31 @@ propio con un ARRAY de decenas de antenas: forman haces y barren el espacio. Con
 formar imagen, igual que no se hace una foto con un solo píxel. No es cuestión
 de software ni de esfuerzo: falta la apertura física.
 
+**DÓNDE ESTÁ LA IA (Marc preguntó dos veces; merece estar escrito).**
+Estado honesto: **hoy este proyecto casi no tiene IA.** Es DSP + un RandomForest
+sobre 8 features a mano. Y eso es la decisión de ingeniería CORRECTA (986
+ventanas, señal 12x sobre ruido → una red sería peor). Pero como "proyecto de
+IA", hoy no pesa. Dónde entraría la IA de verdad, por orden:
+1. **Espectrogramas Doppler + CNN** para actividades (andar/sentarse/caer). De 8
+   números a una imagen tiempo-frecuencia. Los 100 Hz reales dan de sobra.
+2. **Generalización entre dominios — aquí está lo bueno.** El CSI no transfiere
+   entre salas, y las soluciones son puramente de IA: entrenamiento adversarial
+   de dominio, adaptación few-shot, representaciones invariantes al entorno. Es
+   problema abierto, nivel paper. El dataset de 2 salas es la munición.
+3. **Auto-supervisado.** CSI sin etiquetar se genera gratis (dejar las placas
+   toda la noche); etiquetado casi nada. Esa asimetría es exactamente donde
+   brilla el preentrenamiento + fine-tuning con pocas etiquetas.
+4. **Caídas**: eventos raros y cortos → few-shot / detección de anomalías.
+**El argumento de fondo:** no existe checkpoint preentrenado para CSI de WiFi. No
+hay HuggingFace del que tirar. La mayoría de "proyectos de IA" son fontanería
+sobre el modelo de otro; aquí la IA sería tuya, sobre datos que tú fabricaste.
+Y lo que se hizo el 15/07 (desconfiar de un 98% y encontrar que la adaptación de
+tasa chivaba la etiqueta) es la parte del ML que de verdad importa y que casi
+nadie hace. Un modelo no es mejor que sus datos.
+**Caveat honesto:** si el objetivo fuera trabajar en LLMs, esto no lo demuestra —
+demuestra ML sobre señales, que es otra especialidad. Como diferenciador, vale
+más que otro RAG.
+
 **Por qué el ESP32 tiene techo:** tiene UNA sola cadena de RX (ni el S3, ni los
 módulos con "diversidad de antena", que conmutan pero reciben por una a la vez).
 Eso descarta la **CSI ratio** — dividir el CSI de dos antenas del mismo receptor
@@ -84,15 +109,15 @@ Objetivo: intuición del CSI y pipeline de ML montado con datos existentes.
 
 ### Fase 1 — Hardware y captura propia (Semanas 2-3)
 Objetivo: capturar mi propio CSI en casa.
-- [x] Comprar 2× ESP32 (pedidas; llegan el 14/07). Placa: ESP32-WROOM-32
-      DevKitC USB-C, chip serie CH340C.
-- [~] Flashear el ESP32-CSI-Tool (uno TX, uno RX)
-      → ENTORNO YA LISTO sin placa: ESP-IDF v4.3.6 instalado (Offline Installer),
-      repo clonado en Desktop\ESP32-CSI-Tool, driver CH340 instalado. LOS DOS
-      firmwares COMPILAN limpio: active_ap y active_sta (idf.py set-target esp32 +
-      build OK). Falta solo el flasheo físico el día 14 (idf.py -p COMx flash).
-- [ ] Capturar CSI real en mi habitación (yo moviéndome vs vacío)
-- [ ] Entregable: dataset propio grabado y etiquetado
+- [x] Comprar 2× ESP32. Placa: ESP32-WROOM-32 DevKitC USB-C.
+      **Chip serie: CP2102** (la nota original decía CH340C, salida del anuncio;
+      Windows las reporta como `Silicon Labs CP210x`. Corregido en Sesión 5b).
+- [x] Flashear el ESP32-CSI-Tool (uno TX, uno RX) — hecho en Sesión 4.
+      ESP-IDF v4.3.6, repo en Desktop\ESP32-CSI-Tool. Los 3 bugs de puesta en
+      marcha (CSI del driver sin activar, FREERTOS_HZ, baudrate) en Sesión 4.
+- [x] Capturar CSI real en mi habitación (yo moviéndome vs vacío) — Sesión 5.
+- [x] Entregable: dataset propio grabado y etiquetado → 10 tandas en `data/raw/`,
+      publicadas en el repo. 986 ventanas, 100% filas útiles, sin fugas conocidas.
 
 ### Fase 2 — Presencia y movimiento (Semanas 3-5)
 Objetivo: primer demo real.
@@ -100,9 +125,37 @@ Objetivo: primer demo real.
       → src/preprocess.py: drop_null_subcarriers + hampel_filter + lowpass
       (Butterworth fase-cero), encadenados en preprocess_amplitude. Ventaneo en
       features.sliding_windows. Validado con sintético. Sesión 3.
-- [ ] Detección presencia/movimiento en tiempo (casi) real
-- [ ] Probar a través de una pared
-- [ ] Entregable: demo en vivo que dice "hay alguien / no hay nadie"
+- [x] Detección presencia/movimiento en tiempo (casi) real → `monitor_vivo` con el
+      clf real inyectado, cantando MOTION al andar. Sesión 5.
+- [x] **Entregable: demo en vivo que dice "hay alguien / no hay nadie"** → HECHO.
+      **0.987 ± 0.012 de accuracy cross-grabación** (train en 8 tandas, test en 2
+      no vistas). Sin `amp_mean`/`amp_std`: 0.984 → el modelo va por variabilidad
+      temporal, no por nivel de señal (buena señal para transferir).
+- [~] Probar a través de una pared
+      → Probado a través de una PUERTA de madera (no es un tabique: cuesta solo
+      1.4 dB). Presencia/movimiento no se ha probado sin línea de visión; lo que
+      se probó fue la RESPIRACIÓN (ver Sesión 5b): detecta pero es frágil.
+
+### Fase 2.5 — RESPIRACIÓN · LA ESTRELLA POLAR
+_(No estaba en el roadmap original: se fijó como estrella polar en la Sesión 2 y
+se consiguió en la 5b. Es lo que diferencia el proyecto de un sensor PIR de 3 €.)_
+- [x] Estimador de respiración por FFT + zero-pad + confianza → `src/breathing.py`
+      (Sesión 3, validado sobre sintético).
+- [x] **Detección de respiración REAL con verdad de referencia** → pautado a 6 rpm,
+      medido **0.100 Hz = 6.0 rpm exactos, SNR 39.1 dB** en línea de visión.
+      Control de vacío: 7.9 dB en frecuencia aleatoria. Predicción falsable
+      superada (se cambió el ritmo y el pico siguió). Sesión 5b.
+- [x] **Decidir hardware según el SNR medido** → listón ≥20 dB, medidos 39.1.
+      **El WROOM basta. No comprar AX210.**
+- [~] Respiración SIN línea de visión → a través de una puerta cerrada de madera:
+      **detecta pero es frágil** (dos medidas de la misma condición: 3.3 y
+      17.3 dB). Faltan 5 repeticiones por condición + control de vacío con la sta
+      fuera. Ver checklist en §7.
+- [ ] Respiración a través de un TABIQUE de verdad (lo de hoy fue una puerta:
+      1.4 dB). Es el momento wow real.
+- [ ] Llevar el análisis al repo (hoy fue un script de usar y tirar) y calibrar
+      `umbral_resp` de `stream.py` (sigue en 2.0, placeholder).
+- [ ] Entregable: demo en vivo diciendo "hay alguien respirando a N rpm" sin verle.
 
 ### Fase 3 — Reconocimiento de actividad / caídas (Semanas 6-8)
 Objetivo: subir un escalón, el que diferencia.
@@ -132,27 +185,43 @@ Objetivo: convertir el trabajo en portfolio/tracción.
       del anuncio, antes de que llegaran. **Al comprar más, filtrar por CP2102.**
 Presupuesto real: ~12 € placas + cables
 
-### Compra pendiente (decidida en Sesión 5b, ~50-60 €)
+### Compra PEDIDA el 2026-07-15 (~60,44 €, envío gratis, llega ~22-27 jul)
+Marcadas [x] las que fueron al carrito. Al recibir, comprobar:
+- **Los cables Toocki 7A**: que transmitan DATOS, no solo carga. El "7A" es bueno
+  (conductor grueso = sin brownout), pero muchos cables de carga rápida no llevan
+  datos. Si no los llevan, los receptores no envían nada.
+- **Las 4 placas de 4,12 €**: no decía el chip serie. Puede ser CP2102 o CH340.
+  Da igual: los dos drivers están instalados. Solo que si son CH340 aparecerán con
+  otro nombre en el Administrador de dispositivos — no asustarse.
+- Recordar que **los puertos COM bailan**: reidentificar siempre al empezar.
+
+### Compra (decidida en Sesión 5b, ~50-60 €)
 **Consejo nº1: pedir EL MISMO anuncio que ya compraste** (ESP32-WROOM-32 DevKitC
 USB-C, CP2102, ~5,89 €/u). Funcionan, el driver está puesto, el conector encaja.
 No experimentar con hardware que ya va.
-- [ ] **4× ESP32-WROOM-32 DevKitC USB-C (CP2102)** — receptores `passive`. El tool
+- [x] **4× ESP32-WROOM-32 DevKitC USB-C (CP2102)** — receptores `passive`. El tool
       ya soporta la arquitectura: 1 sta transmitiendo + 1 AP + N pasivos
       escuchando el MISMO tren de paquetes. No añaden interferencia (no
       transmiten). Justificación medida: sin línea de visión, un solo enlace es
       una lotería (3.3 vs 17.3 dB en la misma condición) → 4 receptores = 4
       tiradas, y te quedas con el que tenga un camino que cruce el pecho.
-- [ ] **1× hub USB CON ALIMENTACIÓN PROPIA** (4-7 puertos + transformador). El
+- [x] **1× hub USB CON ALIMENTACIÓN PROPIA** (4-7 puertos + transformador). El
       portátil no alimenta 5 placas; ver el brownout de la Sesión 5.
-- [ ] **5× cable USB-A→USB-C de DATOS, 2-3 m, grueso.** El cable fino fue la causa
+- [x] **5× cable USB-A→USB-C de DATOS, 2-3 m, grueso.** El cable fino fue la causa
       del brownout que costó 30 min.
-- [ ] **6× mini trípode / pinza de móvil.** Repetibilidad: con cinta el RSSI derivó
+- [x] **6× mini trípode / pinza de móvil.** Repetibilidad: con cinta el RSSI derivó
       3.3 dB en 15 min y cada montaje es irrepetible. Es la mayor fuente de ruido
       experimental ahora mismo.
-- [ ] (Opcional, 3 piezas que deben encajar) **2× ESP32-WROOM-32U** (conector U.FL)
-      + **2× latiguillo U.FL→SMA hembra** + **2× antena 2.4 GHz SMA macho**,
-      direccional si es posible. Da ganancia y sobre todo **directividad** →
-      poder APUNTAR, que es justo lo que falta en el caso sin línea de visión.
+- [x] **Pack "ESP32-WROOM-32U + Antenna", variante 1Set-Type-C** (7,32 €): trae
+      la placa 32U + el latiguillo U.FL→SMA + la antena, todo junto. OJO: el 32U
+      NO tiene antena de PCB — sin la externa no radia.
+      **La antena incluida es OMNIDIRECCIONAL, no directiva**, así que NO da el
+      "apuntar". Lo que sí da: ~2-3 dBi de ganancia, libertad física (la antena va
+      en un cable → se separa del metal y se coloca donde convenga) y sobre todo
+      **el conector SMA**. Eso es lo irreversible: a partir de ahí, cualquier
+      antena SMA se enrosca. Si algún día se mide que la directividad ayuda, un
+      panel de 8-9 dBi son 5 € y dos segundos. NO comprarlo antes de medirlo —
+      mismo criterio que con el AX210.
 - [ ] (NO comprar todavía) Intel AX200/AX210 + PicoScenes. La medida de la Sesión
       5b ya decidió: **el WROOM basta para respiración en LOS (39.1 dB vs listón
       de 20)**. El AX210 solo si la fase / CSI ratio resulta imprescindible.
@@ -552,6 +621,33 @@ pequeño (entrena en segundos/minutos en el portátil) → reentrenable en el si
 Recordar: el CSI NO generaliza entre salas → para demo en sitio nuevo se
 CALIBRA in situ (grabar 2 min por clase + reentrenar). Venderlo como feature:
 "se adapta a cualquier sala en ~10 min".
+
+**AÑADIDO Sesión 5b — el mejor resultado YA es un producto.** El montaje que da
+39.1 dB (persona tumbada, quieta, enlace cruzándole el pecho) **es literalmente
+monitorización del sueño**: frecuencia respiratoria nocturna sin wearable, sin
+cámara, sin nada tocando al usuario. Y NO necesita atravesar ninguna pared — las
+placas van dentro del dormitorio, que es donde funciona espectacular. Derivados:
+pausas respiratorias (la apnea está masivamente infradiagnosticada — pero eso es
+terreno médico regulado: contarlo como *monitorización de bienestar*, no como
+diagnóstico, salvo certificación). **Atravesar paredes es el truco que impresiona
+en la demo; el dormitorio es el que se vende.**
+
+**El foso NO es el hardware.** Origin Wireless y Cognitive Systems llevan años en
+esto y su modelo no es vender cajas: es **licenciar software a operadoras y
+fabricantes de routers**. Razón: el hardware ya está instalado en todas las casas
+del mundo; quien venda "una cajita" compite contra el router que el cliente ya
+tiene. El movimiento ganador es ser **la capa de software sobre hardware ya
+desplegado** — y por eso 802.11bf importa tanto: el día que los APs comerciales
+expongan sensado, gana quien tenga los algoritmos, sin fabricar nada.
+**→ Los 2 ESP32 no son el producto: son el laboratorio.** Son cómo se demuestra
+que sabes hacer los algoritmos antes de tener acceso al hardware bueno.
+
+**Sobre la web/GitHub Pages (Fase 4): hacerla DESPUÉS de la respiración, no
+antes.** La página es el marco; lo que importa es el cuadro. Una web preciosa
+sobre un detector de presencia es una web preciosa sobre algo que hace un PIR de
+3 €. Con un GIF detectando respiración sin línea de visión, es otra cosa. Incluir
+sección de "lo que casi me engaña y cómo lo cacé" (la fuga de la adaptación de
+tasa) — vale más que la de resultados, porque casi nadie mira eso.
 
 **Montaje físico:**
 - Habitación: dormitorio de Marc (un solo enlace, una sala).
