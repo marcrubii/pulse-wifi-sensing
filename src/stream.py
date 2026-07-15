@@ -49,8 +49,9 @@ class CsiTailer:
 
 
 from src.features import window_features
-from src.preprocess import lowpass
+from src.preprocess import lowpass, hampel_filter
 from src.breathing import estimate_breathing
+
 
 
 class LiveMonitor:
@@ -62,7 +63,7 @@ class LiveMonitor:
     separately over the long buffer when the person is still.
     """
 
-    def __init__(self, clf=None, mov_label: int = 1, fs: float = 100.0,
+    def __init__(self, clf=None, mov_label: int = 0, fs: float = 100.0,
                  dur_s: float = 60.0, win_len: int = 128, umbral_resp: float = 2.0):
         self.clf = clf                 # already-trained sklearn pipeline (or None)
         self.mov_label = mov_label
@@ -81,10 +82,13 @@ class LiveMonitor:
         n = len(self.buf)
         if n < max(self.win_len, int(2 * self.fs)):
             return {"state": "warming up", "n": n}
-        # 1) motion? -> classifier over the recent window
+        # 1) motion? -> classifier over the recent window.
+        # Same chain as build_dataset (hampel + low-pass): feeding raw amplitude
+        # here would hand the model a distribution it never saw in training.
         moviendo = False
         if self.clf is not None:
-            feat = window_features(self.buf[-self.win_len:])[None, :]
+            vent = lowpass(hampel_filter(self.buf[-self.win_len:]), fs=self.fs, fc=5.0)
+            feat = window_features(vent)[None, :]
             moviendo = self.clf.predict(feat)[0] == self.mov_label
         if moviendo:
             return {"state": "MOTION", "rpm": None, "conf": None, "n": n}
@@ -93,22 +97,26 @@ class LiveMonitor:
         state = f"STILL · breathing {rpm:.0f} bpm" if conf > self.umbral_resp else "EMPTY / no signal"
         return {"state": state, "rpm": round(rpm, 1), "conf": round(conf, 1), "n": n}
 
+
+
 import time
 from datetime import datetime
-def monitor_vivo(path: str, clf, fs: float = 100.0, refresco_s: float = 2.0,
-                 duracion_s: float | None = None, dur_buffer_s: float = 60.0) -> None:
+def monitor_vivo(path: str, clf, fs: float = 107.0, refresco_s: float = 2.0,
+                 duracion_s: float | None = None, dur_buffer_s: float = 60.0,
+                 mov_label: int = 0) -> None:
     """Reads the CSV live and prints the verdict every `refresco_s` seconds.
 
-    duracion_s=None -> runs indefinitely (Ctrl+C to stop). On capture day:
-    start the capture into `path` and run this in parallel.
+    mov_label: index the classifier assigns to "motion". With classes sorted
+    alphabetically (['mov', 'vacio']) that is 0 -- pass clases.index("mov").
     """
     tailer = CsiTailer(path)
-    mon = LiveMonitor(clf=clf, fs=fs, dur_s=dur_buffer_s)
+    mon = LiveMonitor(clf=clf, mov_label=mov_label, fs=fs, dur_s=dur_buffer_s)
     t0 = time.time()
     while duracion_s is None or time.time() - t0 < duracion_s:
         mon.push(tailer.read_new())
         v = mon.veredicto()
         hora = datetime.now().strftime("%H:%M:%S")
         extra = f"  conf={v['conf']}" if v.get("conf") is not None else ""
-        print(f"[{hora}] {v['state']:26s} (buffer {v['n'] / fs:4.0f}s){extra}")
+        print(f"[{hora}] {v['state']:26s} (buffer {v['n'] / fs:4.0f}s){extra}", flush=True)
         time.sleep(refresco_s)
+

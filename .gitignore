@@ -8,15 +8,22 @@ venv/
 # Jupyter
 .ipynb_checkpoints/
 
-# Notebooks de exploración Fase 0 (fuera del repo público; siguen en local)
+# Notebooks fuera del repo público (siguen en local)
 notebooks/00_fase0_pipeline_csi.ipynb
 notebooks/01_loader_esp32.ipynb
+notebooks/03_modelo_real.ipynb
 
-# Datos (no versionar datasets grandes)
-data/raw/*
+# Datos: data/raw (10 tandas vacio/mov) y data/breathing (capturas de
+# respiración) SÍ se publican — son la evidencia de las métricas y no se
+# pueden regrabar (la geometría que las produjo ya no existe).
 data/processed/*
-!data/raw/.gitkeep
 !data/processed/.gitkeep
+
+# Capturas de usar y tirar (pruebas de enlace, monitor en vivo)
+data/live/
+
+# CSI sintético de la Fase 0 y ficheros de prueba
+data/synthetic/
 
 # OS / editor
 .DS_Store

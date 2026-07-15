@@ -21,19 +21,19 @@ def etiqueta_de_nombre(path: str) -> str:
     base = os.path.basename(path)
     return base.split("_")[0].split(".")[0]
 
-
-def build_dataset(raw_dir: str = "data/raw", fs: float = 100.0, fc: float = 5.0,
+def build_dataset(raw_dir: str = "data/raw", fs: float = 107.0, fc: float = 5.0,
                   win_len: int = 128, hop: int = 64):
-    """Returns (X, y, classes).
+    """Returns (X, y, classes, groups).
 
-    X: (n_windows, win_len, n_sub)  |  y: (n_windows,) integers
-    classes: list of names; y indexes into it.
+    groups: (n_windows,) source recording of each window, e.g. "vacio_01".
+    Needed for honest evaluation: train on some recordings, test on OTHERS.
+    A random split leaks -- windows from one recording share the static channel.
     """
     paths = sorted(glob.glob(os.path.join(raw_dir, "*.csv")))
     if not paths:
         raise FileNotFoundError(f"no CSV files in {raw_dir}")
 
-    Xs, nombres = [], []
+    Xs, nombres, grupos = [], [], []
     for p in paths:
         amp = cargar_amplitudes(p)          # (n, 64) raw amplitude
         amp = hampel_filter(amp)            # spike removal
@@ -41,6 +41,7 @@ def build_dataset(raw_dir: str = "data/raw", fs: float = 100.0, fc: float = 5.0,
         w = sliding_windows(amp, win_len=win_len, hop=hop)
         Xs.append(w)
         nombres += [etiqueta_de_nombre(p)] * len(w)
+        grupos += [os.path.basename(p)[:-4]] * len(w)
         print(f"  {os.path.basename(p):24s} -> {len(w):4d} windows "
               f"[{etiqueta_de_nombre(p)}]")
 
@@ -48,4 +49,4 @@ def build_dataset(raw_dir: str = "data/raw", fs: float = 100.0, fc: float = 5.0,
     clases = sorted(set(nombres))
     idx = {c: i for i, c in enumerate(clases)}
     y = np.array([idx[n] for n in nombres])
-    return X, y, clases
+    return X, y, clases, np.array(grupos)

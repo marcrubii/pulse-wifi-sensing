@@ -53,6 +53,7 @@ CSI CSV     ──►  preprocessing        ──►  { windowing + classifier 
 | File | What it does |
 |---|---|
 | `src/synth_csi.py` | Generates synthetic CSI (motion & breathing) to validate without hardware |
+| `src/capture.py` | Records CSI to CSV straight off the receiver's serial port |
 | `src/load_esp32.py` | Loads the real ESP32-CSI-Tool CSV → amplitude matrix |
 | `src/preprocess.py` | Cleanup: null subcarriers → spike removal → low-pass |
 | `src/features.py` | Features + sliding windows |
@@ -82,17 +83,46 @@ End-to-end classification pipeline:
 $env:PYTHONPATH="."; python src/train.py
 ```
 
+## Dataset
+
+Recorded with 2× ESP32-WROOM-32 (ESP32-CSI-Tool), one bedroom, one person,
+~107 packets/s, 64 subcarriers, channel 1, PHY rate pinned to MCS0 so every frame
+is identical. Published because the numbers below mean nothing without it — and
+because the geometry that produced it no longer exists.
+
+| Folder | Contents |
+|---|---|
+| `data/raw/` | 10 recordings of 60 s: 5× `vacio` (empty room), 5× `mov` (person walking). Classes alternated; fan off, phone in airplane mode at a fixed spot, door closed, nothing moved between takes. |
+| `data/breathing/` | Person lying still, breathing at a **paced** rate as ground truth. `resp_6rpm` / `resp_12rpm` (link in the room), `resp_puerta*` (transmitter outside, door closed/open), `resp_vacio` (negative control). |
+
 ## Status & honesty
 
-- **Done:** full pipeline (preprocessing, windowing, classifier, breathing
-  estimator, live monitor), validated on synthetic CSI with known ground truth.
-- **In progress:** capture with real hardware (2× ESP32-WROOM-32) and evaluation
-  on own data.
+- **Presence / motion: 0.987 ± 0.012 accuracy, cross-recording** — each fold
+  trains on 8 recordings and tests on 2 the model never saw. Dropping the
+  absolute-level features costs almost nothing (0.984), so the model runs on
+  temporal variability, not on signal strength.
+  **This is a floor, not an achievement:** one room, one geometry, one person,
+  15 minutes. "Empty room vs person walking" is the easiest discrimination in the
+  field (12× energy ratio in the 0.5–5 Hz band).
+- **Breathing: detected.** Paced at 6 breaths/min, the estimator returns
+  **0.100 Hz = 6.0 rpm with 39.1 dB SNR** in line of sight; an empty room returns
+  7.9 dB at a random frequency. The rate was verified by *prediction*: changing
+  the paced rate moved the measured peak exactly where predicted.
+- **Breathing without line of sight (transmitter outside, door closed): works,
+  but it is fragile.** Two runs of the nominally identical setup gave 3.3 dB and
+  17.3 dB. The RSSI moved 8 dB between them, so they were not in fact identical —
+  losing the direct path makes the result hostage to details you do not control.
+  Characterising this properly needs repetitions per condition, not single shots.
 - **Known, accepted limit:** CSI **does not generalize across rooms** (the static
   channel changes). Honest evaluation requires training on some recordings and
   testing on **different** ones of the same class; a naive cross-validation over a
   single recording inflates the results. For a new environment you recalibrate on
   site (record a few minutes per class and retrain).
+  The breathing estimator is exempt: it is frequency **estimation**, not
+  classification — nothing is learned, so there is no domain to depend on.
+- **Not attempted, and not possible with this hardware:** imaging a figure through
+  a wall (RF-Pose style). That needs an antenna array; 1 TX + 1 RX with one
+  antenna each has no spatial resolution.
 
 ## Context
 

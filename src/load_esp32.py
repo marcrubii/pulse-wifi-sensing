@@ -1,17 +1,25 @@
-# Step 1: read the file and isolate the CSI field
-import numpy as np
 
-def load_esp32_csv(path):
-    filas_csi = []           # here we accumulate the "[...]" text of each row
+import numpy as np
+SIG_MODE_COL = 5   # 0 = legacy (non-HT), 1 = HT
+
+def load_esp32_csv(path, sig_mode=1):
+    """Return the raw "[...]" text of each CSI row.
+
+    Only rows matching `sig_mode` are kept: at the same RSSI, legacy and HT
+    frames come out of the chip on different amplitude scales (~19 vs ~13), so
+    mixing them injects 50% jumps that look like motion. sig_mode=None keeps all.
+    """
+    filas_csi = []
     with open(path) as f:
         for linea in f:
             linea = linea.strip()
             if not linea.startswith("CSI_DATA"):
-                continue                     # skip empty lines or headers
-            crudo = linea.split("[")[1]      # everything after the "["
-            crudo = crudo.split("]")[0]      # drop the trailing "]"
+                continue
+            if sig_mode is not None and int(linea.split(",")[SIG_MODE_COL]) != sig_mode:
+                continue
+            crudo = linea.split("[")[1].split("]")[0]
             filas_csi.append(crudo)
-    return filas_csi   # for now we return the text, to inspect it
+    return filas_csi
 
 
 def fila_a_amplitud(texto_crudo):
@@ -22,8 +30,8 @@ def fila_a_amplitud(texto_crudo):
     amplitud = np.sqrt(real**2 + imag**2)   # complex magnitude, per subcarrier
     return amplitud                          # array of 64 values
 
-
-def cargar_amplitudes(path):
-    filas = load_esp32_csv(path)                       # raw text of each row
-    matriz = np.array([fila_a_amplitud(f) for f in filas])  # stack -> (n_rows, 64)
+def cargar_amplitudes(path, sig_mode=1):
+    
+    filas = load_esp32_csv(path, sig_mode)
+    matriz = np.array([fila_a_amplitud(f) for f in filas])
     return matriz
